@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block title %}Decode{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Decode Hidden File</h2>
+
+    <form action="/decode" method="post" enctype="multipart/form-data">
+        <label>Select Encoded Image:</label>
+        <input type="file" name="image" required>
+
+        <label>Enter Secret Key:</label>
+        <input type="text" name="key" required>
+
+        <button class="btn">Decode</button>
+    </form>
+</div>
+{% endblock %}

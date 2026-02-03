@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Secure Steganography System{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <h1>Secure File Transmission System</h1>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/encode">Encode</a>
+            <a href="/decode">Decode</a>
+            <a href="/logout" style="color: red;">Logout</a>
+        </nav>
+    </div>
+</header>
+
+<main class="container">
+    {% block content %}{% endblock %}
+</main>
+
+<footer>
+    <p>Final Year Project — Steganography & Cryptography</p>
+</footer>
+
+</body>
+</html>

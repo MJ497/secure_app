@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Welcome</h2>
+    <p>
+        This system provides secure file transmission using
+        <strong>encryption</strong> and <strong>steganography</strong>.
+    </p>
+
+    <p>
+        Files are encrypted using AES-256 and hidden inside images before transmission.
+    </p>
+
+    <div class="btn-group">
+        <a class="btn" href="/encode">Encode File</a>
+        <a class="btn" href="/decode">Decode File</a>
+    </div>
+</div>
+{% endblock %}
