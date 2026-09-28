@@ -10,11 +10,14 @@ DELIMITER = "#####"
 def jpeg_capacity(image_path):
     """
     Returns maximum number of bits that can be embedded
-    (1 bit per pixel for LSB steganography).
+    (1 bit per pixel per channel for LSB steganography).
+    Uses blue channel for embedding to preserve color.
     """
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    h, w = img.shape
-    return (h * w)  # bits (1 per pixel)
+    img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError("Could not read image")
+    h, w = img.shape[:2]
+    return (h * w)  # bits (1 per pixel in blue channel)
 
 
 # ================= BIT HELPERS =================
@@ -31,29 +34,31 @@ def _from_bits(bits: str):
 
 def embed_jpeg_dct(image_path, secret_data: bytes, output_path):
     """
-    Embed encrypted data into image using LSB (Least Significant Bit) steganography.
-    More reliable than DCT for JPEG images.
+    Embed encrypted data into image using LSB steganography on blue channel.
+    Preserves color by only modifying LSB of blue channel.
     """
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError("Could not read image")
     
     # Prepare data with delimiter
     data_with_delim = secret_data + DELIMITER.encode()
     bits = _to_bits(data_with_delim)
     
-    # Flatten image
-    flat_img = img.flatten()
+    # Use blue channel (index 0 in BGR)
+    blue_channel = img[:, :, 0].flatten()
     
     # Check capacity
-    if len(bits) > len(flat_img):
+    if len(bits) > len(blue_channel):
         raise ValueError("Data too large for image")
     
-    # Embed bits into LSB of each pixel
+    # Embed bits into LSB of blue channel
     for i, bit in enumerate(bits):
-        flat_img[i] = (flat_img[i] & 0xFE) | int(bit)
+        blue_channel[i] = (blue_channel[i] & 0xFE) | int(bit)
     
-    # Reshape and save
-    embedded_img = flat_img.reshape(img.shape)
-    cv2.imwrite(output_path, embedded_img)
+    # Reshape and put back
+    img[:, :, 0] = blue_channel.reshape(img.shape[:2])
+    cv2.imwrite(output_path, img)
     
     return True
 
@@ -62,17 +67,21 @@ def embed_jpeg_dct(image_path, secret_data: bytes, output_path):
 
 def extract_jpeg_dct(image_path):
     """
-    Extract hidden data from image using LSB steganography.
+    Extract hidden data from image using LSB steganography on blue channel.
     Stops automatically when delimiter is found.
     """
-    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-    flat_img = img.flatten()
+    img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError("Could not read image")
+    
+    # Extract from blue channel (index 0 in BGR)
+    blue_channel = img[:, :, 0].flatten()
     
     bits = ""
     extracted = bytearray()
     
-    # Extract LSB from each pixel
-    for pixel in flat_img:
+    # Extract LSB from each pixel in blue channel
+    for pixel in blue_channel:
         bit = pixel & 1
         bits += str(bit)
         
