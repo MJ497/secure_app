@@ -5,6 +5,12 @@
 {% block content %}
 <div class="card">
     <h2>Decode Hidden File</h2>
+    {% if error %}
+    <div style="color:red; margin-bottom:15px;">
+        {{ error }}
+    </div>
+{% endif %}
+
 
     <form action="/decode" method="post" enctype="multipart/form-data">
         <label>Select Encoded Image:</label>

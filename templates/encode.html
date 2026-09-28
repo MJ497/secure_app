@@ -5,7 +5,9 @@
 {% block content %}
 <div class="card">
     <h2>Encode File into Image</h2>
-
+ {% if error %}
+        <p style="color: red; font-weight: 500;">{{ error }}</p>
+    {% endif %}
     <form action="/encode" method="post" enctype="multipart/form-data">
         <label>Select File to Hide:</label>
         <input type="file" name="file" required>

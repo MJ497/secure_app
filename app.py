@@ -3,7 +3,7 @@ import base64
 import time
 
 from flask import (
-    Flask, request, jsonify, send_file,
+    Flask, request, send_file,
     render_template, redirect, url_for, session
 )
 from werkzeug.utils import secure_filename
@@ -11,7 +11,12 @@ from werkzeug.utils import secure_filename
 from config import Config
 from core.crypto import generate_key, encrypt_data, decrypt_data
 from core.stego import embed_data, extract_data           # PNG-LSB
-from core.jpeg_stego import embed_jpeg_dct, extract_jpeg_dct, jpeg_capacity
+from core.jpeg_stego import (
+    embed_jpeg_dct,
+    extract_jpeg_dct,
+    jpeg_capacity,
+    DELIMITER
+)
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -19,8 +24,7 @@ app.secret_key = "super_secret_session_key"
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-
-# ----------------- AUTH GUARD -----------------
+# ================= AUTH GUARD =================
 
 @app.before_request
 def require_login():
@@ -28,13 +32,15 @@ def require_login():
     if request.endpoint not in public_routes and 'user' not in session:
         return redirect(url_for('login'))
 
-
-# ----------------- AUTH -----------------
+# ================= AUTH =================
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        if request.form.get('username') == 'admin' and request.form.get('password') == 'admin123':
+        if (
+            request.form.get('username') == 'admin' and
+            request.form.get('password') == 'admin123'
+        ):
             session['user'] = 'admin'
             return redirect(url_for('home'))
 
@@ -48,8 +54,7 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-
-# ----------------- PAGES -----------------
+# ================= PAGES =================
 
 @app.route('/')
 def home():
@@ -65,8 +70,7 @@ def encode_page():
 def decode_page():
     return render_template('decode.html')
 
-
-# ----------------- ENCODE -----------------
+# ================= ENCODE =================
 
 @app.route('/encode', methods=['POST'])
 def encode():
@@ -85,40 +89,65 @@ def encode():
     file.save(file_path)
     image.save(image_path)
 
-    raw_data = open(file_path, 'rb').read()
+    with open(file_path, 'rb') as f:
+        raw_data = f.read()
 
     key = generate_key()
     encrypted = encrypt_data(key, raw_data)
     encoded_key = base64.b64encode(key).decode()
 
     ext = image_name.rsplit('.', 1)[1].lower()
-    output_image = os.path.join(app.config['UPLOAD_FOLDER'], f"encoded_{image_name}")
+    output_image = os.path.join(
+        app.config['UPLOAD_FOLDER'],
+        f"encoded_{image_name}"
+    )
 
     start = time.time()
 
-    if ext == 'png':
-        embed_data(image_path, encrypted, output_image)
+    try:
+        # ---------- PNG (LSB) ----------
+        if ext == 'png':
+            embed_data(image_path, encrypted, output_image)
 
-    elif ext in ['jpg', 'jpeg']:
-        if len(encrypted) * 8 > jpeg_capacity(image_path):
-            return render_template('encode.html', error="Payload too large for this JPEG")
+        # ---------- JPEG (DCT) ----------
+        elif ext in ['jpg', 'jpeg']:
+            required_bits = (len(encrypted) + len(DELIMITER)) * 8
+            capacity = jpeg_capacity(image_path)
 
-        embed_jpeg_dct(image_path, encrypted, output_image)
+            if required_bits > capacity:
+                return render_template(
+                    'encode.html',
+                    error="Payload too large for this JPEG image"
+                )
 
-    else:
-        return render_template('encode.html', error="Unsupported image format")
+            embed_jpeg_dct(image_path, encrypted, output_image)
+
+        else:
+            return render_template(
+                'encode.html',
+                error="Unsupported image format"
+            )
+
+    except Exception as e:
+        print("ENCODE ERROR:", e)
+        return render_template(
+            'encode.html',
+            error="Encoding failed. Check image format and payload size."
+        )
 
     print("Encoding time:", time.time() - start)
 
     return render_template(
         'result.html',
-        message="Encoding successful. SAVE THE KEY.",
+        message="Encoding successful. SAVE THE SECRET KEY. Note : key cannot be regenerated.",
         secret_key=encoded_key,
-        download_url=url_for('download_file', filename=os.path.basename(output_image))
+        download_url=url_for(
+            'download_file',
+            filename=os.path.basename(output_image)
+        )
     )
 
-
-# ----------------- DECODE -----------------
+# ================= DECODE =================
 
 @app.route('/decode', methods=['POST'])
 def decode():
@@ -142,28 +171,46 @@ def decode():
     try:
         if ext == 'png':
             encrypted = extract_data(image_path)
+
         elif ext in ['jpg', 'jpeg']:
             encrypted = extract_jpeg_dct(image_path)
+
         else:
-            return render_template('decode.html', error="Unsupported image format")
+            return render_template(
+                'decode.html',
+                error="Unsupported image format"
+            )
 
         decrypted = decrypt_data(key, encrypted)
 
     except Exception:
-        return render_template('decode.html', error="Wrong key or corrupted image")
+        return render_template(
+            'decode.html',
+            error="Wrong key or corrupted image"
+        )
 
-    output_path = os.path.join(app.config['UPLOAD_FOLDER'], "decoded_file")
-    open(output_path, 'wb').write(decrypted)
+    output_path = os.path.join(
+        app.config['UPLOAD_FOLDER'],
+        "decoded_file"
+    )
 
-    return send_file(output_path, as_attachment=True, download_name="decoded_file")
+    with open(output_path, 'wb') as f:
+        f.write(decrypted)
 
+    return send_file(
+        output_path,
+        as_attachment=True,
+        download_name="decoded_file"
+    )
 
-# ----------------- DOWNLOAD -----------------
+# ================= DOWNLOAD =================
 
 @app.route('/download/<filename>')
 def download_file(filename):
-    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), as_attachment=True)
-
+    return send_file(
+        os.path.join(app.config['UPLOAD_FOLDER'], filename),
+        as_attachment=True
+    )
 
 if __name__ == '__main__':
     app.run(debug=True)
